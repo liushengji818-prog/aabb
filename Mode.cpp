@@ -112,7 +112,7 @@ std::string Mode::transformKernel() const {
 std::string Mode::transformName() const {
 	switch (this->target) {
 		case ADDRESS:
-			return "Address";
+			return "Tron Address";
 		case CONTRACT:
 			return "Contract";
 		case PRIVATE_KEY:

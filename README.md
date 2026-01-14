@@ -1,6 +1,6 @@
 # profanity3 for windows
 
-Profanity is the fastest vanity generator for ethereum addresses and contract addresses.
+Profanity is the fastest vanity generator for Tron addresses and contract addresses.
 
 "profanity3 is a fork of "profanity2" from 1inch Network <info@1inch.io>, which fixes the security problems of the original "profanity" from Johan Gustafsson <profanity@johgu.se>.
 
@@ -108,8 +108,9 @@ usage: ./profanity3 [OPTIONS]
     ./profanity3 -z HEX_PUBLIC_KEY_128_CHARS_LONG --crack
 
   About:
-    profanity3 is a vanity address generator for Ethereum that utilizes
-    computing power from GPUs using OpenCL.
+    profanity3 is a vanity address generator for Tron that utilizes
+    computing power from GPUs using OpenCL. Output is in Tron Base58Check
+    format with the 0x41-prefixed hex shown for reference.
 
   Forked "profanity3":
     Author: Rodrigo Madera <madera@acm.org>
