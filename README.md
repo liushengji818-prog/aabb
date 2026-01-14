@@ -1,8 +1,8 @@
-# profanity3 for windows
+  
 
 Profanity is the fastest vanity generator for Tron addresses and contract addresses.
 
-"profanity3 is a fork of "profanity2" from 1inch Network <info@1inch.io>, which fixes the security problems of the original "profanity" from Johan Gustafsson <profanity@johgu.se>.
+"profanity3 is a fork of "profanity2" from 1inch Network <info@1inch.io>, which fixes the security problems of the original "profanity" from Johan Gustafsson <profanity@johgu.se>.  
 
 "profanity3" from Rodrigo Madera <madera@acm.org>, is the same as "profanity2" with just one special feature: it can reverse engineer "profanity1" keys.
 
