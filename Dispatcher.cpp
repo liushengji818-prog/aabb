@@ -9,6 +9,10 @@
 #include <random>
 #include <thread>
 #include <algorithm>
+#include <array>
+#include <cstdint>
+#include <cstring>
+#include <vector>
 
 #if defined(__APPLE__) || defined(__MACOSX)
 #include <machine/endian.h>
@@ -73,6 +77,205 @@ static std::string toHex(const uint8_t * const s, const size_t len) {
 	return r;
 }
 
+struct Sha256State {
+	uint32_t h[8];
+	uint8_t buffer[64];
+	uint64_t bitlen;
+	size_t bufferLen;
+};
+
+static constexpr uint32_t sha256K[64] = {
+	0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
+	0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+	0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
+	0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+	0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc,
+	0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+	0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+	0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+	0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
+	0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+	0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3,
+	0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+	0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5,
+	0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+	0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
+	0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+};
+
+static uint32_t rotr32(const uint32_t x, const uint32_t n) {
+	return (x >> n) | (x << (32 - n));
+}
+
+static void sha256Init(Sha256State & state) {
+	state.h[0] = 0x6a09e667;
+	state.h[1] = 0xbb67ae85;
+	state.h[2] = 0x3c6ef372;
+	state.h[3] = 0xa54ff53a;
+	state.h[4] = 0x510e527f;
+	state.h[5] = 0x9b05688c;
+	state.h[6] = 0x1f83d9ab;
+	state.h[7] = 0x5be0cd19;
+	state.bitlen = 0;
+	state.bufferLen = 0;
+}
+
+static void sha256Transform(Sha256State & state, const uint8_t block[64]) {
+	uint32_t w[64];
+	for (size_t i = 0; i < 16; ++i) {
+		w[i] = (static_cast<uint32_t>(block[i * 4]) << 24)
+			| (static_cast<uint32_t>(block[i * 4 + 1]) << 16)
+			| (static_cast<uint32_t>(block[i * 4 + 2]) << 8)
+			| (static_cast<uint32_t>(block[i * 4 + 3]));
+	}
+
+	for (size_t i = 16; i < 64; ++i) {
+		const uint32_t s0 = rotr32(w[i - 15], 7) ^ rotr32(w[i - 15], 18) ^ (w[i - 15] >> 3);
+		const uint32_t s1 = rotr32(w[i - 2], 17) ^ rotr32(w[i - 2], 19) ^ (w[i - 2] >> 10);
+		w[i] = w[i - 16] + s0 + w[i - 7] + s1;
+	}
+
+	uint32_t a = state.h[0];
+	uint32_t b = state.h[1];
+	uint32_t c = state.h[2];
+	uint32_t d = state.h[3];
+	uint32_t e = state.h[4];
+	uint32_t f = state.h[5];
+	uint32_t g = state.h[6];
+	uint32_t h = state.h[7];
+
+	for (size_t i = 0; i < 64; ++i) {
+		const uint32_t s1 = rotr32(e, 6) ^ rotr32(e, 11) ^ rotr32(e, 25);
+		const uint32_t ch = (e & f) ^ (~e & g);
+		const uint32_t temp1 = h + s1 + ch + sha256K[i] + w[i];
+		const uint32_t s0 = rotr32(a, 2) ^ rotr32(a, 13) ^ rotr32(a, 22);
+		const uint32_t maj = (a & b) ^ (a & c) ^ (b & c);
+		const uint32_t temp2 = s0 + maj;
+
+		h = g;
+		g = f;
+		f = e;
+		e = d + temp1;
+		d = c;
+		c = b;
+		b = a;
+		a = temp1 + temp2;
+	}
+
+	state.h[0] += a;
+	state.h[1] += b;
+	state.h[2] += c;
+	state.h[3] += d;
+	state.h[4] += e;
+	state.h[5] += f;
+	state.h[6] += g;
+	state.h[7] += h;
+}
+
+static void sha256Update(Sha256State & state, const uint8_t * data, const size_t len) {
+	for (size_t i = 0; i < len; ++i) {
+		state.buffer[state.bufferLen++] = data[i];
+		if (state.bufferLen == 64) {
+			sha256Transform(state, state.buffer);
+			state.bitlen += 512;
+			state.bufferLen = 0;
+		}
+	}
+}
+
+static void sha256Final(Sha256State & state, uint8_t out[32]) {
+	size_t i = state.bufferLen;
+	state.buffer[i++] = 0x80;
+
+	if (i > 56) {
+		while (i < 64) {
+			state.buffer[i++] = 0x00;
+		}
+		sha256Transform(state, state.buffer);
+		i = 0;
+	}
+
+	while (i < 56) {
+		state.buffer[i++] = 0x00;
+	}
+
+	state.bitlen += state.bufferLen * 8;
+	const uint64_t bitlen = state.bitlen;
+	for (size_t j = 0; j < 8; ++j) {
+		state.buffer[63 - j] = static_cast<uint8_t>(bitlen >> (j * 8));
+	}
+
+	sha256Transform(state, state.buffer);
+
+	for (size_t j = 0; j < 8; ++j) {
+		out[j * 4] = static_cast<uint8_t>(state.h[j] >> 24);
+		out[j * 4 + 1] = static_cast<uint8_t>(state.h[j] >> 16);
+		out[j * 4 + 2] = static_cast<uint8_t>(state.h[j] >> 8);
+		out[j * 4 + 3] = static_cast<uint8_t>(state.h[j]);
+	}
+}
+
+static void sha256(const uint8_t * data, const size_t len, uint8_t out[32]) {
+	Sha256State state;
+	sha256Init(state);
+	sha256Update(state, data, len);
+	sha256Final(state, out);
+}
+
+static std::string base58Encode(const uint8_t * data, const size_t len) {
+	static const char * const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+	size_t zeros = 0;
+	while (zeros < len && data[zeros] == 0) {
+		++zeros;
+	}
+
+	std::vector<uint8_t> input(data, data + len);
+	std::vector<char> encoded;
+
+	size_t start = zeros;
+	while (start < input.size()) {
+		int carry = 0;
+		for (size_t i = start; i < input.size(); ++i) {
+			const int value = (carry << 8) + input[i];
+			input[i] = static_cast<uint8_t>(value / 58);
+			carry = value % 58;
+		}
+		encoded.push_back(alphabet[carry]);
+		while (start < input.size() && input[start] == 0) {
+			++start;
+		}
+	}
+
+	std::string result(zeros, '1');
+	for (auto it = encoded.rbegin(); it != encoded.rend(); ++it) {
+		result.push_back(*it);
+	}
+	return result;
+}
+
+static std::string tronHexAddress(const uint8_t * const address20) {
+	std::array<uint8_t, 21> raw{};
+	raw[0] = 0x41;
+	std::memcpy(raw.data() + 1, address20, 20);
+	return toHex(raw.data(), raw.size());
+}
+
+static std::string tronBase58Address(const uint8_t * const address20) {
+	std::array<uint8_t, 21> raw{};
+	raw[0] = 0x41;
+	std::memcpy(raw.data() + 1, address20, 20);
+
+	uint8_t first[32];
+	uint8_t second[32];
+	sha256(raw.data(), raw.size(), first);
+	sha256(first, sizeof(first), second);
+
+	std::array<uint8_t, 25> payload{};
+	std::memcpy(payload.data(), raw.data(), raw.size());
+	std::memcpy(payload.data() + raw.size(), second, 4);
+	return base58Encode(payload.data(), payload.size());
+}
+
 static void printResult(cl_ulong4 seed, cl_ulong round, result r, cl_uchar score, const std::chrono::time_point<std::chrono::steady_clock> & timeStart, const Mode & mode) {
 	// Time delta
 	const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - timeStart).count();
@@ -92,20 +295,21 @@ static void printResult(cl_ulong4 seed, cl_ulong round, result r, cl_uchar score
 	const std::string strPrivate = ss.str();
 
 	// Format public key
-	const std::string strPublic = toHex(r.foundHash, 20);
+	const std::string strTronHex = tronHexAddress(r.foundHash);
+	const std::string strTronBase58 = tronBase58Address(r.foundHash);
 
 	// Print to screen
 	const std::string strVT100ClearLine = "\33[2K\r";
 	std::cout << strVT100ClearLine << "  Time: " << std::setw(5) << seconds << "s Score: " << std::setw(2) << (int) score << " Private: 0x" << strPrivate << ' ';
 
 	std::cout << mode.transformName();
-	std::cout << ": 0x" << strPublic << std::endl;
+	std::cout << ": " << strTronBase58 << " (hex: " << strTronHex << ")" << std::endl;
 
 	// print to file
 	std::ofstream outFile("output.txt", std::ios::app);
 	outFile << "Time: " << std::setw(5) << seconds << "s Score: " << std::setw(2) << (int) score << " Private: 0x" << strPrivate << ' ';
 	outFile << mode.transformName();
-	outFile << ": 0x" << strPublic << std::endl;
+	outFile << ": " << strTronBase58 << " (hex: " << strTronHex << ")" << std::endl;
 	outFile.close();
 }
 

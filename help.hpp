@@ -57,8 +57,9 @@ usage: ./profanity3 [OPTIONS]
     ./profanity3 --contract --leading 0 -z HEX_PUBLIC_KEY_128_CHARS_LONG
 
   About:
-    profanity3 is a vanity address generator for Ethereum that utilizes
-    computing power from GPUs using OpenCL.
+    profanity3 is a vanity address generator for Tron that utilizes
+    computing power from GPUs using OpenCL. Output is in Tron Base58Check
+    format with the 0x41-prefixed hex shown for reference.
 
   Forked "profanity3":
     Author: Rodrigo Madera <madera@acm.org>
